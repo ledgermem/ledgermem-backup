@@ -1,0 +1,13 @@
+bin/
+vendor/
+*.test
+*.out
+.vscode/
+.idea/
+go.sum
+*.age
+*.pgdump
+*.tar
+*.tar.gz
+.env
+.env.*
