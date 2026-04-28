@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"filippo.io/age"
@@ -164,10 +166,17 @@ func restoreCmd() *cobra.Command {
 }
 
 func verifyCmd() *cobra.Command {
-	var path string
+	var (
+		path         string
+		identityFile string
+	)
 	cmd := &cobra.Command{
 		Use:   "verify",
-		Short: "Verify a snapshot file is non-empty and well-formed",
+		Short: "Verify a snapshot decrypts and is a valid pg_dump custom-format archive",
+		Long: `verify decrypts the snapshot with the given age identity (if --identity is set)
+and runs pg_restore --list against the resulting stream. A non-zero size check is
+not enough — a truncated or corrupted archive can pass that, then fail at restore
+time when it is too late. This catches the failure now.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if path == "" {
 				return fmt.Errorf("--file is required")
@@ -179,11 +188,45 @@ func verifyCmd() *cobra.Command {
 			if fi.Size() == 0 {
 				return fmt.Errorf("snapshot file is empty: %s", path)
 			}
-			fmt.Printf("ok: %s (%d bytes)\n", path, fi.Size())
+
+			f, err := os.Open(filepath.Clean(path))
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			var stream io.Reader = f
+			if identityFile != "" {
+				id, err := encryption.LoadIdentity(identityFile)
+				if err != nil {
+					return fmt.Errorf("load identity: %w", err)
+				}
+				dec, err := age.Decrypt(f, id)
+				if err != nil {
+					return fmt.Errorf("decrypt: %w", err)
+				}
+				stream = dec
+			}
+
+			// pg_restore --list reads the archive header + table-of-contents
+			// and exits non-zero if the file is truncated, the magic bytes
+			// don't match, or the format is unsupported. It does NOT touch
+			// any database — purely a structural check.
+			restoreCmd := exec.Command("pg_restore", "--list")
+			restoreCmd.Stdin = stream
+			restoreCmd.Stdout = io.Discard
+			var stderr strings.Builder
+			restoreCmd.Stderr = &stderr
+			if err := restoreCmd.Run(); err != nil {
+				return fmt.Errorf("pg_restore --list failed: %w (%s)", err, strings.TrimSpace(stderr.String()))
+			}
+
+			fmt.Printf("ok: %s (%d bytes, archive valid)\n", path, fi.Size())
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&path, "file", "", "Path to snapshot file")
+	cmd.Flags().StringVar(&identityFile, "identity", "", "Path to age identity for encrypted snapshots")
 	return cmd
 }
 
