@@ -152,8 +152,34 @@ func restoreCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(dst, r)
-			return err
+			if _, err := io.Copy(dst, r); err != nil {
+				return fmt.Errorf("write decrypted snapshot: %w", err)
+			}
+			// fsync the file before declaring restore success: without it,
+			// the bytes sit in the page cache and a host crash within the
+			// next ~30s leaves a zero-length or truncated dump on disk
+			// while the CLI has already exited 0. Restore is a one-shot
+			// operation — silently writing a corrupt file is the worst
+			// possible failure mode.
+			if err := dst.Sync(); err != nil {
+				return fmt.Errorf("fsync %s: %w", out, err)
+			}
+			// Verify the decrypted dump is structurally valid BEFORE we
+			// hand it back. A corrupted ciphertext or a truncated upload
+			// can decrypt to garbage that only fails at `pg_restore` time
+			// — by then the source backup may have been rotated out.
+			if _, err := dst.Seek(0, io.SeekStart); err != nil {
+				return fmt.Errorf("rewind for verify: %w", err)
+			}
+			verify := exec.CommandContext(ctx, "pg_restore", "--list")
+			verify.Stdin = dst
+			verify.Stdout = io.Discard
+			var verr strings.Builder
+			verify.Stderr = &verr
+			if err := verify.Run(); err != nil {
+				return fmt.Errorf("restored file failed pg_restore --list: %w (%s)", err, strings.TrimSpace(verr.String()))
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&identityFile, "identity", "", "Path to age identity (private key)")
