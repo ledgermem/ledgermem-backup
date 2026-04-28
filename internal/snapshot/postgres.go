@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"os/exec"
 )
 
@@ -43,12 +44,28 @@ func (p *Postgres) Stream(ctx context.Context, w io.Writer) error {
 	if p.opts.DSN == "" {
 		return errors.New("postgres snapshot: DSN required")
 	}
-	if _, err := url.Parse(p.opts.DSN); err != nil {
+	parsed, err := url.Parse(p.opts.DSN)
+	if err != nil {
 		return fmt.Errorf("postgres snapshot: invalid DSN: %w", err)
 	}
 
-	args := append([]string{"--no-owner", "--no-privileges", "--format=custom", p.opts.DSN}, p.opts.ExtraArgs...)
+	// Pass the DSN via PGPASSWORD / a sanitized URI in the environment so
+	// the password never appears in the process argv (visible to anyone
+	// who can read /proc on the host or to `ps`).
+	env := append([]string{}, os.Environ()...)
+	dsnForArg := p.opts.DSN
+	if parsed.User != nil {
+		if pw, ok := parsed.User.Password(); ok && pw != "" {
+			env = append(env, "PGPASSWORD="+pw)
+			// Strip the password from the URI we hand to pg_dump.
+			parsed.User = url.User(parsed.User.Username())
+			dsnForArg = parsed.String()
+		}
+	}
+
+	args := append([]string{"--no-owner", "--no-privileges", "--format=custom", dsnForArg}, p.opts.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, p.opts.PgDumpPath, args...)
+	cmd.Env = env
 	cmd.Stdout = w
 	stderr, _ := cmd.StderrPipe()
 

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -58,7 +59,16 @@ func snapshotCmd() *cobra.Command {
 				return fmt.Errorf("--dsn, --recipient, and --bucket are required")
 			}
 			if key == "" {
-				key = fmt.Sprintf("ledgermem/%s.pgdump.age", time.Now().UTC().Format("20060102T150405"))
+				// Include a random suffix so two snapshots started inside the
+				// same second (e.g. retried CronJob, manual + scheduled run)
+				// never overwrite each other.
+				suffix := make([]byte, 4)
+				if _, err := rand.Read(suffix); err != nil {
+					return fmt.Errorf("generate key suffix: %w", err)
+				}
+				key = fmt.Sprintf("ledgermem/%s-%x.pgdump.age",
+					time.Now().UTC().Format("20060102T150405"),
+					suffix)
 			}
 
 			s3Client, err := newS3Client(ctx, s3Region, s3Endpoint)
