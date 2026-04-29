@@ -1,4 +1,4 @@
-// Package snapshot streams point-in-time snapshots of LedgerMem state.
+// Package snapshot streams point-in-time snapshots of Mnemo state.
 package snapshot
 
 import (

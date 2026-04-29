@@ -1,4 +1,4 @@
-// Package schedule installs ledgermem-backup as a recurring job.
+// Package schedule installs getmnemo-backup as a recurring job.
 //
 // Two backends are supported:
 //   - systemd timer (Linux hosts) — installs unit + timer files
@@ -15,9 +15,9 @@ import (
 
 // SystemdOptions installs a systemd timer.
 type SystemdOptions struct {
-	UnitName  string // e.g. "ledgermem-backup"
+	UnitName  string // e.g. "getmnemo-backup"
 	Schedule  string // OnCalendar, e.g. "daily" or "*-*-* 02:00:00"
-	ExecStart string // command to run, e.g. "/usr/local/bin/ledgermem-backup snapshot --dest s3://..."
+	ExecStart string // command to run, e.g. "/usr/local/bin/getmnemo-backup snapshot --dest s3://..."
 	UnitDir   string // /etc/systemd/system in production; tmp dir in tests
 	User      string // optional User= directive
 }
@@ -34,7 +34,7 @@ func InstallSystemd(opts SystemdOptions) error {
 	}
 
 	service := fmt.Sprintf(`[Unit]
-Description=LedgerMem encrypted backup snapshot
+Description=Mnemo encrypted backup snapshot
 
 [Service]
 Type=oneshot
@@ -42,7 +42,7 @@ Type=oneshot
 `, userLine(opts.User), opts.ExecStart)
 
 	timer := fmt.Sprintf(`[Unit]
-Description=LedgerMem encrypted backup timer
+Description=Mnemo encrypted backup timer
 
 [Timer]
 OnCalendar=%s
@@ -84,7 +84,7 @@ func EmitCronJob(w io.Writer, opts CronJobOptions) error {
 		opts.Namespace = "default"
 	}
 	if opts.Image == "" {
-		opts.Image = "ghcr.io/ledgermem/ledgermem-backup:latest"
+		opts.Image = "ghcr.io/getmnemo/getmnemo-backup:latest"
 	}
 	args := strings.Join(quoted(opts.Args), ", ")
 

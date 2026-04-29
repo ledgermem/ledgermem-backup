@@ -7,7 +7,7 @@ import (
 
 // VectorOptions describes the pgvector source.
 //
-// pgvector lives in the same Postgres database as the rest of LedgerMem
+// pgvector lives in the same Postgres database as the rest of Mnemo
 // state, so we simply delegate to a Postgres snapshotter scoped to the
 // vector tables.
 type VectorOptions struct {

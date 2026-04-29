@@ -1,4 +1,4 @@
-// Command ledgermem-backup is the LedgerMem backup CLI.
+// Command getmnemo-backup is the Mnemo backup CLI.
 package main
 
 import (
@@ -17,19 +17,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/spf13/cobra"
 
-	"github.com/ledgermem/ledgermem-backup/internal/encryption"
-	"github.com/ledgermem/ledgermem-backup/internal/schedule"
-	"github.com/ledgermem/ledgermem-backup/internal/snapshot"
-	"github.com/ledgermem/ledgermem-backup/internal/storage"
+	"github.com/getmnemo/getmnemo-backup/internal/encryption"
+	"github.com/getmnemo/getmnemo-backup/internal/schedule"
+	"github.com/getmnemo/getmnemo-backup/internal/snapshot"
+	"github.com/getmnemo/getmnemo-backup/internal/storage"
 )
 
 var version = "dev"
 
 func main() {
 	root := &cobra.Command{
-		Use:   "ledgermem-backup",
-		Short: "Encrypted backup & restore for LedgerMem",
-		Long:  `ledgermem-backup snapshots Postgres + pgvector + object storage, encrypts with age, and uploads to S3-compatible storage.`,
+		Use:   "getmnemo-backup",
+		Short: "Encrypted backup & restore for Mnemo",
+		Long:  `getmnemo-backup snapshots Postgres + pgvector + object storage, encrypts with age, and uploads to S3-compatible storage.`,
 	}
 	root.Version = version
 
@@ -68,7 +68,7 @@ func snapshotCmd() *cobra.Command {
 				if _, err := rand.Read(suffix); err != nil {
 					return fmt.Errorf("generate key suffix: %w", err)
 				}
-				key = fmt.Sprintf("ledgermem/%s-%x.pgdump.age",
+				key = fmt.Sprintf("getmnemo/%s-%x.pgdump.age",
 					time.Now().UTC().Format("20060102T150405"),
 					suffix)
 			}
@@ -259,7 +259,7 @@ time when it is too late. This catches the failure now.`,
 func scheduleCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "schedule",
-		Short: "Install ledgermem-backup as a recurring job",
+		Short: "Install getmnemo-backup as a recurring job",
 	}
 	var (
 		systemdDir string
@@ -280,9 +280,9 @@ func scheduleCmd() *cobra.Command {
 		},
 	}
 	systemd.Flags().StringVar(&systemdDir, "unit-dir", "/etc/systemd/system", "systemd unit directory")
-	systemd.Flags().StringVar(&unitName, "name", "ledgermem-backup", "systemd unit base name")
+	systemd.Flags().StringVar(&unitName, "name", "getmnemo-backup", "systemd unit base name")
 	systemd.Flags().StringVar(&cron, "on-calendar", "daily", "systemd OnCalendar expression")
-	systemd.Flags().StringVar(&execStart, "exec", "/usr/local/bin/ledgermem-backup snapshot", "ExecStart command")
+	systemd.Flags().StringVar(&execStart, "exec", "/usr/local/bin/getmnemo-backup snapshot", "ExecStart command")
 
 	var (
 		k8sName string
@@ -305,10 +305,10 @@ func scheduleCmd() *cobra.Command {
 			})
 		},
 	}
-	k8s.Flags().StringVar(&k8sName, "name", "ledgermem-backup", "CronJob name")
+	k8s.Flags().StringVar(&k8sName, "name", "getmnemo-backup", "CronJob name")
 	k8s.Flags().StringVar(&k8sNS, "namespace", "default", "Namespace")
 	k8s.Flags().StringVar(&k8sCron, "schedule", "0 2 * * *", "Cron schedule expression")
-	k8s.Flags().StringVar(&k8sImg, "image", "ghcr.io/ledgermem/ledgermem-backup:latest", "Container image")
+	k8s.Flags().StringVar(&k8sImg, "image", "ghcr.io/getmnemo/getmnemo-backup:latest", "Container image")
 	k8s.Flags().StringVar(&k8sEnv, "env-from", "", "Optional Secret name to source env from")
 
 	cmd.AddCommand(systemd, k8s)
